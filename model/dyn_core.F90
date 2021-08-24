@@ -2682,8 +2682,8 @@ do 1000 j=jfirst,jlast
  real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed+1, 1:npz):: u, vc
  real, intent(in),  dimension(bd%isd:bd%ied+1, bd%jsd:bd%jed,   1:npz):: v, uc
  real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: ua, va
- real, intent(in),  dimension(bd%isd:      ,   bd%jsd:      ,   1:npz):: w
- real, intent(in),  dimension(bd%isd:      ,   bd%jsd:      ,   1:npz+1):: zh
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: w
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz+1):: zh
  real, intent(out), dimension(bd%isd:bd%ied, bd%jsd:bd%jed, 1:npz):: smag
  type(fv_grid_type), intent(IN), target :: gridstruct
  
@@ -2696,10 +2696,12 @@ do 1000 j=jfirst,jlast
  real:: ducdz(bd%isd:bd%ied+1,bd%jsd:bd%jed, 1:npz)
  real:: dvcdz(bd%isd:bd%ied,  bd%jsd:bd%jed+1, 1:npz)
  real:: dwdz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  
+ real:: duadz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  
+ real:: dvadz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  
  real:: zc(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  Height of layer center
  real:: delz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !< Lagrangian layer thickness  
- real:: d
- integer:: i,j,k
+ real:: d, d1, d2, d3
+ integer:: i, j, k
 
 
  real, pointer, dimension(:,:) :: dxc, dyc, dx, dy, rarea, rarea_c
@@ -2916,7 +2918,7 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je
            do i = is, ie+1
-              ut(i,j,k) = dvdz(i,j,k) * (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j,k)
+              ut(i,j,k) = dvdz(i,j,k) * (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j)
            enddo
         enddo
      enddo
@@ -2924,7 +2926,7 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je+1
            do i = is, ie
-              vt(i,j,k) = dudz(i,j,k) * (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j,k)
+              vt(i,j,k) = dudz(i,j,k) * (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j)
            enddo
         enddo
      enddo
@@ -2944,7 +2946,7 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je
            do i = is, ie+1
-              ut(i,j,k) = (w(i,j,k) - w(i-1,j,k)) / dxc(i,j,k)
+              ut(i,j,k) = (w(i,j,k) - w(i-1,j,k)) / dxc(i,j)
            enddo
         enddo
      enddo
@@ -2961,7 +2963,7 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je
            do i = is, ie+1
-              ut(i,j,k) = (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j,k)
+              ut(i,j,k) = (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j)
            enddo
         enddo
      enddo
@@ -2981,7 +2983,7 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je+1
            do i = is, ie
-              vt(i,j,k) = (w(i,j,k) - w(i,j-1,k)) / dyc(i,j,k)
+              vt(i,j,k) = (w(i,j,k) - w(i,j-1,k)) / dyc(i,j)
            enddo
         enddo
      enddo
@@ -2998,7 +3000,7 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je+1
            do i = is, ie
-              vt(i,j,k) = (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j,k)
+              vt(i,j,k) = (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j)
            enddo
         enddo
      enddo
@@ -3026,12 +3028,11 @@ do 1000 j=jfirst,jlast
  ! Compute a*u_x + b*v_y + c*w_z
  subroutine compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, a, b, c, smag, bd, npz, gridstruct, ng)
  type(fv_grid_bounds_type), intent(IN) :: bd
- real, intent(in):: dt
  integer, intent(IN) :: ng, npz
  real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed+1, 1:npz):: vc, dvcdz
  real, intent(in),  dimension(bd%isd:bd%ied+1, bd%jsd:bd%jed,   1:npz):: uc, ducdz
- real, intent(in),  dimension(bd%isd:      ,   bd%jsd:      ,   1:npz):: w, dwdz
- real, intent(in),  dimension(bd%isd:      ,   bd%jsd:      ,   1:npz):: zc, delz
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: w, dwdz
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: zc, delz
  real, intent(inout), dimension(bd%isd:bd%ied, bd%jsd:bd%jed, 1:npz):: smag
  type(fv_grid_type), intent(IN), target :: gridstruct
  real, intent(in) :: a, b, c
@@ -3046,7 +3047,7 @@ do 1000 j=jfirst,jlast
  real, pointer, dimension(:,:) :: dxc, dyc, dx, dy, rarea, rarea_c
 
  integer :: is,  ie,  js,  je
- integer :: isd, ied, jsd, jed
+ integer :: isd, ied, jsd, jed, k
       
  is  = bd%is
  ie  = bd%ie
@@ -3088,7 +3089,7 @@ do 1000 j=jfirst,jlast
        do j = js, je
           do i = is, ie
              wk(i,j,k) = -a*ut(i,j,k) + a*ut(i+1,j,k)
-             wk(i,j,k) = wk(i,j,k) - b*v(i,j,k) + b*v(i,j+1,k)
+             wk(i,j,k) = wk(i,j,k) - b*vt(i,j,k) + b*vt(i,j+1,k)
              wk(i,j,k) = rarea(i,j) * wk(i,j,k)
           enddo
        enddo
@@ -3098,7 +3099,7 @@ do 1000 j=jfirst,jlast
     do k = 1, npz
        do j = js, je
           do i = is, ie+1
-             ut(i,j,k) = ducdz(i,j,k) * (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j,k)
+             ut(i,j,k) = ducdz(i,j,k) * (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j)
           enddo
        enddo
     enddo
@@ -3106,7 +3107,7 @@ do 1000 j=jfirst,jlast
     do k = 1, npz
        do j = js, je+1
           do i = is, ie
-             vt(i,j,k) = dvcdz(i,j,k) * (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j,k)
+             vt(i,j,k) = dvcdz(i,j,k) * (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j)
           enddo
        enddo
     enddo
@@ -3114,7 +3115,7 @@ do 1000 j=jfirst,jlast
     do k = 1, npz
        do j = js, je
           do i = is, ie
-             wk(i,j,k) = wk(i,j,k) - 0.5*a*(ut(i,j,k) + ut(i+1,j,k) - 0.5*b*(vt(i,j,k) + vt(i,j+1,k))
+             wk(i,j,k) = wk(i,j,k) - 0.5*a*(ut(i,j,k) + ut(i+1,j,k)) - 0.5*b*(vt(i,j,k) + vt(i,j+1,k))
           enddo
        enddo
     enddo
