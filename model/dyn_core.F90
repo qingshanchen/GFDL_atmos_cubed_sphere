@@ -267,6 +267,9 @@ contains
     real diss_e(bd%is:bd%ie,bd%js:bd%je)
     real damp_vt(npz+1)
     integer nord_v(npz+1)
+! New array for the Smagorinsky eddy closure coefficient
+    real smag(bd%isd:bd%ied, bd%jsd:bd%jed, 1:npz)    
+    
 !-------------------------------------
     integer :: hord_m, hord_v, hord_t, hord_p
     integer :: nord_k, nord_w, nord_t
@@ -746,8 +749,16 @@ contains
     !****************************************************************
     ! Compute Smagorinsky eddy closure coefficients                 *
     !****************************************************************
-    
+    call compute_smag_tensor_norm(u(isd,jsd,1), v(isd, jsd, 1), uc(isd, jsd, 1), vc(isd, jsd, 1), &
+         ua(isd, jsd, 1), va(isd, jsd, 1), w(isd:, jsd:, 1:), zh(isd, jsd, 1), smag(isd, jsd, 1), bd, npz, &
+         gridstruct)
 
+!    write(*,*) "Writing out values of smag:"
+!    write(*,*) smag(isd+5, jsd+5, 1), smag(isd+25, jsd+5, 1), smag(isd+5, jsd+50, 1)
+!    write(*,*) smag(isd+5, jsd+5, 3), smag(isd+50, jsd+5, 3), smag(isd+5, jsd+50, 3)
+!    write(*,*) smag(isd+5, jsd+5, 5), smag(isd+50, jsd+5, 5), smag(isd+5, jsd+50, 5) 
+!    write(*,*) smag(isd+5, jsd+5, 5), smag(isd+52, jsd+5, 10), smag(isd+5, jsd+25, 5)
+!    write(*,*) smag(isd+5, jsd+5, 15), smag(isd+50, jsd+5, 15), smag(isd+5, jsd+60, 15)
     
                                                      call timing_on('d_sw')
 !$OMP parallel do default(none) shared(npz,flagstruct,nord_v,pfull,damp_vt,hydrostatic,last_step, &
@@ -2673,12 +2684,11 @@ do 1000 j=jfirst,jlast
 
 
 !>@brief The subroutine 'compute_smag_tensor_norm' computes Smagorinsky damping.
- subroutine compute_smag_tensor_norm(dt, u, v, uc, vc, ua, va, w, zh, smag, bd, npz, gridstruct, ng)
+ subroutine compute_smag_tensor_norm(u, v, uc, vc, ua, va, w, zh, smag, bd, npz, gridstruct)
    !> Compute the 3D Smagorinsky diffusion parameter at cell center
    
  type(fv_grid_bounds_type), intent(IN) :: bd
- real, intent(in):: dt
- integer, intent(IN) :: ng, npz
+ integer, intent(IN) :: npz
  real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed+1, 1:npz):: u, vc
  real, intent(in),  dimension(bd%isd:bd%ied+1, bd%jsd:bd%jed,   1:npz):: v, uc
  real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: ua, va
@@ -2880,13 +2890,13 @@ do 1000 j=jfirst,jlast
      enddo
      
      ! Calcuate the component 2/3*u_x - 1/3*v_y - 1/3*w_z on the constant z level
-     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, 2./3, -1./3, -1./3, smag, bd, npz, gridstruct, ng)
+     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, 2./3, -1./3, -1./3, smag, bd, npz, gridstruct)
 
      ! Calcuate the component -1/3*u_x + 2/3*v_y - 1/3*w_z on the constant z level
-     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, 2./3, -1./3, smag, bd, npz, gridstruct, ng)
+     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, 2./3, -1./3, smag, bd, npz, gridstruct)
 
      ! Calcuate the component -1/3*u_x - 1/3*v_y + 2/3*w_z on the constant z level
-     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, -1./3, 2./3, smag, bd, npz, gridstruct, ng)
+     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, -1./3, 2./3, smag, bd, npz, gridstruct)
 
      ! Compute v_x + u_y 
      !! First, at constant Lagrangian levels
@@ -3026,9 +3036,9 @@ do 1000 j=jfirst,jlast
  end subroutine compute_smag_tensor_norm
 
  ! Compute a*u_x + b*v_y + c*w_z
- subroutine compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, a, b, c, smag, bd, npz, gridstruct, ng)
+ subroutine compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, a, b, c, smag, bd, npz, gridstruct)
  type(fv_grid_bounds_type), intent(IN) :: bd
- integer, intent(IN) :: ng, npz
+ integer, intent(IN) :: npz
  real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed+1, 1:npz):: vc, dvcdz
  real, intent(in),  dimension(bd%isd:bd%ied+1, bd%jsd:bd%jed,   1:npz):: uc, ducdz
  real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: w, dwdz
