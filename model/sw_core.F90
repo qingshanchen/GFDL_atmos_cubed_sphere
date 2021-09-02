@@ -522,7 +522,8 @@
 !! and other prognostic varaiables. 
    subroutine d_sw(delpc, delp,  ptc,   pt, u,  v, w, uc,vc, &
                    ua, va, divg_d, xflux, yflux, cx, cy,              &
-                   crx_adv, cry_adv,  xfx_adv, yfx_adv, q_con, z_rat, kgb, heat_source,diss_est,  &
+                   crx_adv, cry_adv,  xfx_adv, yfx_adv, q_con, z_rat, smag, &
+                   kgb, heat_source,diss_est,  &
                    zvir, sphum, nq, q, k, km, inline_q,  &
                    dt, hord_tr, hord_mt, hord_vt, hord_tm, hord_dp, nord,   &
                    nord_v, nord_w, nord_t, dddmp, d2_bg, d4_bg, damp_v, damp_w, &
@@ -541,6 +542,7 @@
       real, intent(inout):: divg_d(bd%isd:bd%ied+1,bd%jsd:bd%jed+1) !< divergence
       real, intent(IN), dimension(bd%isd:bd%ied,  bd%jsd:bd%jed):: z_rat
       real, intent(INOUT), dimension(bd%isd:bd%ied,  bd%jsd:bd%jed):: delp, pt, ua, va
+      real, intent(INOUT), dimension(bd%isd:bd%ied,  bd%jsd:bd%jed):: smag
       real, intent(INOUT), dimension(bd%isd:      ,  bd%jsd:      ):: w, q_con
       real, intent(INOUT), dimension(bd%isd:bd%ied  ,bd%jsd:bd%jed+1):: u, vc
       real, intent(INOUT), dimension(bd%isd:bd%ied+1,bd%jsd:bd%jed  ):: v, uc
@@ -1438,9 +1440,14 @@
           do j=js,je+1
              do i=is,ie+1
 ! The following is an approxi form of Smagorinsky diffusion
-                vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
+                !vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
+                vort(i,j) = abs(dt)*0.
              enddo
           enddo
+
+          !write(*,*) "Magnitude of vort (smag coeff)"
+          !write(*,*) vort(isd+50, jsd+5), " dt = ", dt
+          
       else  ! Correct form: works only for doubly preiodic domain
           call smag_corner(abs(dt), u, v, ua, va, vort, bd, npx, npy, gridstruct, ng)
       endif

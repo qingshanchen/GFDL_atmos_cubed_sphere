@@ -753,12 +753,12 @@ contains
          ua(isd, jsd, 1), va(isd, jsd, 1), w(isd:, jsd:, 1:), zh(isd, jsd, 1), smag(isd, jsd, 1), bd, npz, &
          gridstruct)
 
-!    write(*,*) "Writing out values of smag:"
-!    write(*,*) smag(isd+5, jsd+5, 1), smag(isd+25, jsd+5, 1), smag(isd+5, jsd+50, 1)
-!    write(*,*) smag(isd+5, jsd+5, 3), smag(isd+50, jsd+5, 3), smag(isd+5, jsd+50, 3)
-!    write(*,*) smag(isd+5, jsd+5, 5), smag(isd+50, jsd+5, 5), smag(isd+5, jsd+50, 5) 
-!    write(*,*) smag(isd+5, jsd+5, 5), smag(isd+52, jsd+5, 10), smag(isd+5, jsd+25, 5)
-!    write(*,*) smag(isd+5, jsd+5, 15), smag(isd+50, jsd+5, 15), smag(isd+5, jsd+60, 15)
+    !write(*,*) "Writing out values of smag:"
+    !write(*,*) smag(isd+5, jsd+5, 1), smag(isd+25, jsd+5, 1), smag(isd+5, jsd+50, 1)
+    !write(*,*) smag(isd+5, jsd+5, 3), smag(isd+50, jsd+5, 3), smag(isd+5, jsd+50, 3)
+    !write(*,*) smag(isd+5, jsd+5, 5), smag(isd+50, jsd+5, 5), smag(isd+5, jsd+50, 5) 
+    !write(*,*) smag(isd+5, jsd+5, 5), smag(isd+52, jsd+5, 10), smag(isd+5, jsd+25, 5)
+    !write(*,*) smag(isd+5, jsd+5, 15), smag(isd+50, jsd+5, 15), smag(isd+5, jsd+60, 15)
     
                                                      call timing_on('d_sw')
 !$OMP parallel do default(none) shared(npz,flagstruct,nord_v,pfull,damp_vt,hydrostatic,last_step, &
@@ -884,6 +884,7 @@ contains
 #else
                   q_con(isd:,jsd:,1),  z_rat(isd,jsd),  &
 #endif
+                  smag(isd, jsd, k), &
                   kgb, heat_s, diss_e,zvir, sphum, nq,  q,  k,  npz, flagstruct%inline_q,  dt,  &
                   flagstruct%hord_tr, hord_m, hord_v, hord_t, hord_p,    &
                   nord_k, nord_v(k), nord_w, nord_t, flagstruct%dddmp, d2_divg, flagstruct%d4_bg,  &
