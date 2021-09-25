@@ -48,7 +48,7 @@
  use tp_core_mod,       only: fv_tp_2d, pert_ppm, copy_corners
  use fv_mp_mod, only: fill_corners, XDir, YDir
  use fv_arrays_mod, only: fv_grid_type, fv_grid_bounds_type, fv_flags_type
- use a2b_edge_mod, only: a2b_ord4
+ use a2b_edge_mod, only: a2b_ord4, a2b_ord2
 
 #ifdef SW_DYNAMICS
  use test_cases_mod,   only: test_case
@@ -1436,18 +1436,59 @@
      else
       if ( flagstruct%grid_type < 3 ) then
 ! Interpolate relative vort to cell corners
-          call a2b_ord4(wk, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)
+         call a2b_ord4(wk, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)
+
+          ! 2D approximate form of Smagorinsky diffusion
           do j=js,je+1
              do i=is,ie+1
-! The following is an approxi form of Smagorinsky diffusion
-                !vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
-                vort(i,j) = abs(dt)*0.
+                vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
              enddo
           enddo
 
-          !write(*,*) "Magnitude of vort (smag coeff)"
-          !write(*,*) vort(isd+50, jsd+5), " dt = ", dt
+          ! DEBUG
+          !write(*,*) "min, max (2D):", minval(vort(is:ie+1, js:je+1)), maxval(vort(is:ie+1,js:je+1))
+          ! DEBUG
+
+          ! 3D form of Smagorinsky diffusion
+!         call a2b_ord2(smag, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)          
+!          do j=js,je+1
+!             do i=is,ie+1
+!                vort(i,j) = abs(dt)*vort(i,j)
+
+                ! DEBUG
+                !if (vort(i,j) > 1.0) then
+                !   write(*,*) "dt, i, j = ", dt, i, j
+                !   write(*,*) "vort(i,j) = ", vort(i,j)
+                !   write(*,*) "smag(i-1,j-1), smag(i,j-1), smag(i,j), smag(i-1,j) = ", smag(i-1,j-1), smag(i,j-1), smag(i,j), smag(i-1,j)
+                !endif
+                ! DEBUG
+                
+!             enddo
+!          enddo
           
+          ! DEBUG
+          !if (minval(vort(is:ie+1, js:je+1)) < 0) then
+          !   write(*,*) "NEGATIVE min, max (3D):", minval(vort(is:ie+1, js:je+1)), maxval(vort(is:ie+1,js:je+1))
+          !else
+          !   write(*,*) "min, max (3D):", minval(vort(is:ie+1, js:je+1)), maxval(vort(is:ie+1,js:je+1))
+          !endif
+
+!          if (vort(96,9) > 1.99) then
+!             i = 96
+!             j = 9
+!             write(*,*) "vort(96,9) = ", vort(96,9)
+!             write(*,*) "is ie js je = ", is, ie, js, je
+!              write(*,*) "smag(i-1,j-1), smag(i,j-1), smag(i,j), smag(i-1,j) = ", smag(i-1,j-1), smag(i,j-1), smag(i,j), smag(i-1,j)             
+!          endif
+           
+
+          !if (minval(smag(is:ie+1, js:je+1)) < 0) then
+          !   write(*,*) "NEGATIVE min (3D, smag):", minval(smag(is:ie+1, js:je+1))
+          !elseif (maxval(smag(is:ie+1, js:je+1)) > 0.1) then
+          !   write(*,*) "max (3D, smag):", maxval(smag(is:ie+1,js:je+1))
+          !endif
+          ! DEBUG
+
       else  ! Correct form: works only for doubly preiodic domain
           call smag_corner(abs(dt), u, v, ua, va, vort, bd, npx, npy, gridstruct, ng)
       endif

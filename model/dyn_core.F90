@@ -2747,8 +2747,13 @@ do 1000 j=jfirst,jlast
         enddo
      enddo
   enddo
+
+  !DEBUG 
+!  write(*,*) "zh = ", zh(10,10,:)
+!  write(*,*) "zc = ", zc(10,10,:)
+  !DEBUG
   
-  ! Compute dudz, dvcdz
+    ! Compute dudz, dvcdz
   k = 1
      do j = js, je+1
         do i = is, ie
@@ -2784,9 +2789,11 @@ do 1000 j=jfirst,jlast
            d2 = 0.5*0.5*(delz(i,j-1,k) + delz(i,j,k))
 
            dudz(i,j,k) = 0.5*(u(i,j,k-1) - u(i,j,k))/(d1+d2)
-           dudz(i,j,k) = dudz(i,j,k) + 0.5*(u(i,j,k) - 0)/d2  ! No slippery at lower boundary
+           !dudz(i,j,k) = dudz(i,j,k) + 0.5*(u(i,j,k) - 0)/d2  ! No-slip at lower boundary
+           dudz(i,j,k) = dudz(i,j,k) + 0.  ! Free-slip at lower boundary
            dvcdz(i,j,k) = 0.5*(vc(i,j,k-1) - vc(i,j,k))/(d1+d2)
-           dvcdz(i,j,k) = dvcdz(i,j,k) + 0.5*(vc(i,j,k) - 0.)/d2 ! No slippery at lower boundary
+           !dvcdz(i,j,k) = dvcdz(i,j,k) + 0.5*(vc(i,j,k) - 0.)/d2 ! No-slip at lower boundary
+           dvcdz(i,j,k) = dvcdz(i,j,k) + 0. ! Free-slip at lower boundary
 
         enddo
      enddo
@@ -2827,9 +2834,11 @@ do 1000 j=jfirst,jlast
            d2 = 0.5*0.5*(delz(i-1,j,k) + delz(i,j,k))
 
            dvdz(i,j,k) = 0.5*(v(i,j,k-1) - v(i,j,k))/(d1+d2)
-           dvdz(i,j,k) = dvdz(i,j,k) + 0.5*(v(i,j,k) - 0.)/d2  ! No slippery at the bottom
+           !dvdz(i,j,k) = dvdz(i,j,k) + 0.5*(v(i,j,k) - 0.)/d2  ! No-slip at the bottom, or
+           dvdz(i,j,k) = dvdz(i,j,k) + 0.0                      ! Free-slip at the bottom
            ducdz(i,j,k) = 0.5*(uc(i,j,k-1) - uc(i,j,k))/(d1+d2)
-           ducdz(i,j,k) = ducdz(i,j,k) + 0.5*(uc(i,j,k) - 0.)/d2 ! No slippery at the bottom
+           !ducdz(i,j,k) = ducdz(i,j,k) + 0.5*(uc(i,j,k) - 0.)/d2    ! No-slip at the bottom, or
+           ducdz(i,j,k) = ducdz(i,j,k) + 0.0                         ! Free-slip at the bottom
         enddo
      enddo
      
@@ -2862,6 +2871,29 @@ do 1000 j=jfirst,jlast
            dwdz(i,j,k) = dwdz(i,j,k) + 0.5*(w(i,j,k) - w(i,j,k+1))/(d2+d3)
            duadz(i,j,k) = duadz(i,j,k) + 0.5*(ua(i,j,k) - ua(i,j,k+1))/(d2+d3)
            dvadz(i,j,k) = dvadz(i,j,k) + 0.5*(va(i,j,k) - va(i,j,k+1))/(d2+d3)
+
+     
+              ! DEBUGGING
+              !if (abs(duadz(i,j,k)) > 5e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(duadz(i,j,k)) = ", abs(duadz(i,j,k))
+              !   write(*,*) "d1, d2, d3 = ", d1, d2, d3
+              !   write(*,*) "ua(i,j,k-1), ua(i,j,k), ua(i,j,k+1) = ", ua(i,j,k-1), ua(i,j,k), ua(i,j,k+1)
+              !endif
+              !if (abs(dvadz(i,j,k)) > 5e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(dvadz(i,j,k)) = ", abs(dvadz(i,j,k))
+              !   write(*,*) "d1, d2, d3 = ", d1, d2, d3
+              !   write(*,*) "va(i,j,k-1), va(i,j,k), va(i,j,k+1) = ", va(i,j,k-1), va(i,j,k), va(i,j,k+1)
+              !endif
+              !if (abs(dwdz(i,j,k)) > 1e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(dwdz(i,j,k)) = ", abs(dwdz(i,j,k))
+              !   write(*,*) "d1, d2, d3 = ", d1, d2, d3
+              !   write(*,*) "w(i,j,k-1), w(i,j,k), w(i,j,k+1) = ", w(i,j,k-1), w(i,j,k), w(i,j,k+1)
+              !endif
+              ! DEBUGGING
+           
         enddo
      enddo
   enddo
@@ -2875,16 +2907,21 @@ do 1000 j=jfirst,jlast
            dwdz(i,j,k) = 0.5*(w(i,j,k-1) - w(i,j,k))/(d1+d2)
            dwdz(i,j,k) = dwdz(i,j,k) + 0.5*(w(i,j,k) - 0.)/d2  ! No flux at the bottom
            duadz(i,j,k) = 0.5*(ua(i,j,k-1) - ua(i,j,k))/(d1+d2)
-           duadz(i,j,k) = duadz(i,j,k) + 0.5*(ua(i,j,k) - 0.)/d2  ! No slip at the bottom
+           !duadz(i,j,k) = duadz(i,j,k) + 0.5*(ua(i,j,k) - 0.)/d2  ! No slip at the bottom, or 
+           duadz(i,j,k) = duadz(i,j,k) + 0.0                       ! Free slip at the bottom
            dvadz(i,j,k) = 0.5*(va(i,j,k-1) - va(i,j,k))/(d1+d2)
-           dvadz(i,j,k) = dvadz(i,j,k) + 0.5*(va(i,j,k) - 0.)/d2  ! No flux at the bottom
+           !dvadz(i,j,k) = dvadz(i,j,k) + 0.5*(va(i,j,k) - 0.)/d2  ! No slip at the bottom, or
+           dvadz(i,j,k) = dvadz(i,j,k) + 0.0                       ! Free slip at the bottom
+
         enddo
      enddo
+          
+     
 
      ! Initialize smag
      do k = 1, npz
-        do j = js, je
-           do i = is, ie
+        do j = jsd, jed
+           do i = isd, ied
               smag(i,j,k) = 0.
            enddo
         enddo
@@ -2893,12 +2930,26 @@ do 1000 j=jfirst,jlast
      ! Calcuate the component 2/3*u_x - 1/3*v_y - 1/3*w_z on the constant z level
      call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, 2./3, -1./3, -1./3, smag, bd, npz, gridstruct)
 
+     ! DEBUG
+     !write(*,*) "Point 1. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
      ! Calcuate the component -1/3*u_x + 2/3*v_y - 1/3*w_z on the constant z level
      call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, 2./3, -1./3, smag, bd, npz, gridstruct)
 
+     ! DEBUG
+     !write(*,*) "Point 2. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
+     
      ! Calcuate the component -1/3*u_x - 1/3*v_y + 2/3*w_z on the constant z level
      call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, -1./3, 2./3, smag, bd, npz, gridstruct)
 
+     ! DEBUG
+     !write(*,*) "Point 3. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
+     
      ! Compute v_x + u_y 
      !! First, at constant Lagrangian levels
      do k = 1, npz
@@ -2946,10 +2997,23 @@ do 1000 j=jfirst,jlast
         do j = js, je
            do i = is, ie
               wk(i,j,k) = wk(i,j,k) - 0.5*(ut(i,j,k) + ut(i+1,j,k) + vt(i,j,k) + vt(i,j+1,k))
+
+              ! DEBUGGING
+              !if (abs(wk(i,j,k)) > 0.1) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(vxuy(i,j,k)) = ", abs(wk(i,j,k))
+              !endif
+              ! DEBUGGING
+              
+              
               smag(i,j,k) = smag(i,j,k) + wk(i,j,k)**2
            enddo
         enddo
      enddo
+     
+     ! DEBUG
+     !write(*,*) "Point 4. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
      
 
      ! Compute w_x + u_z
@@ -2970,6 +3034,15 @@ do 1000 j=jfirst,jlast
         enddo
      enddo
 
+     ! DEBUG
+     !if (abs(wk(96,9,61)) > 1e-2) then
+     !   write(*,*) 'w_x + u_z:'
+     !   write(*,*) 'wx(96,9,61), wx(97,9,61) = ', ut(96,9,61), ut(97,9,61)
+     !   write(*,*) 'duadz(96,9,61) = ', duadz(96,9,61)
+     !end if
+     ! DEBUG
+     
+     
      !! Correction due to the sloping Lagrangian surfaces
      do k = 1, npz
         do j = js, je
@@ -2982,12 +3055,36 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je
            do i = is, ie
-              wk(i,j,k) = wk(i,j,k) - 0.5*(ut(i,j,k) + ut(i+1,j,k))*dwdz(i,j,k) 
+              wk(i,j,k) = wk(i,j,k) - 0.5*(ut(i,j,k) + ut(i+1,j,k))*dwdz(i,j,k)
+
+              ! DEBUGGING
+              !if (abs(wk(i,j,k)) > 0.1) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(wxuz(i,j,k)) = ", abs(wk(i,j,k))
+              !endif
+              ! DEBUGGING
+              
               smag(i,j,k) = smag(i,j,k) + wk(i,j,k)**2
            enddo
         enddo
      enddo
 
+     ! DEBUG
+!     if (abs(wk(96,9,61)) > 1e-2) then
+!        write(*,*) 'w_x + u_z: correction'
+!        write(*,*) 'zx(96,9,61), zx(97,9,61) = ', ut(96,9,61), ut(97,9,61)
+!        write(*,*) 'dwdz(96,9,61) = ', dwdz(96,9,61)
+!     end if
+     ! DEBUG
+     
+     
+     ! DEBUG
+!     if (smag(96,9,61) > 1.9e-3) then
+!        write(*,*) "Point 5. smag(96, 9, 61) = ", smag(96,9,61)
+!     end if
+     
+     ! DEBUG
+     
 
      ! Compute w_y + v_z
      !! First, w_y + v_z at constant Langrangian surface
@@ -3019,20 +3116,47 @@ do 1000 j=jfirst,jlast
      do k = 1, npz
         do j = js, je
            do i = is, ie
-              wk(i,j,k) = wk(i,j,k) - 0.5*(vt(i,j,k) + vt(i,j+1,k))*dwdz(i,j,k) 
+              wk(i,j,k) = wk(i,j,k) - 0.5*(vt(i,j,k) + vt(i,j+1,k))*dwdz(i,j,k)
+
+              ! DEBUGGING
+!              if (abs(wk(i,j,k)) > 0.1) then
+!                 write(*,*) "i, j, k = ", i, j, k
+!                 write(*,*) "abs(wyvz(i,j,k)) = ", abs(wk(i,j,k))
+!              endif
+              ! DEBUGGING
+              
               smag(i,j,k) = smag(i,j,k) + wk(i,j,k)**2
            enddo
         enddo
      enddo
+
+     ! DEBUG
+     !write(*,*) "Point 6. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
 
      ! Square root
      do k = 1, npz
         do j = js, je
            do i = is, ie
               smag(i,j,k) = sqrt(smag(i,j,k))
+
+              ! DEBUGGING
+              !if (smag(i,j,k) > 5.48e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "smag(i,j,k) = ", smag(i,j,k)
+              !endif
+              ! DEBUGGING
+              
            enddo
         enddo
      enddo
+
+     ! DEBUGGING
+     !write(*,*) 'max of smag: ', maxval(smag)
+     !write(*,*) 'indices    : ', maxloc(smag)
+     ! DEBUGGING
+     
     
  end subroutine compute_smag_tensor_norm
 
