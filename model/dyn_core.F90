@@ -2582,4 +2582,586 @@ do 1000 j=jfirst,jlast
  end subroutine gz_bc
 
 
+!>@brief The subroutine 'compute_smag_tensor_norm' computes Smagorinsky damping.
+ subroutine compute_smag_tensor_norm(u, v, uc, vc, ua, va, w, zh, smag, bd, npz, gridstruct)
+   !> Compute the 3D Smagorinsky diffusion parameter at cell center
+   
+ type(fv_grid_bounds_type), intent(IN) :: bd
+ integer, intent(IN) :: npz
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed+1, 1:npz):: u, vc
+ real, intent(in),  dimension(bd%isd:bd%ied+1, bd%jsd:bd%jed,   1:npz):: v, uc
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: ua, va
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: w
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz+1):: zh
+ real, intent(out), dimension(bd%isd:bd%ied, bd%jsd:bd%jed, 1:npz):: smag
+ type(fv_grid_type), intent(IN), target :: gridstruct
+ 
+! local
+ real:: ut(bd%isd:bd%ied+1,bd%jsd:bd%jed, 1:npz)
+ real:: vt(bd%isd:bd%ied,  bd%jsd:bd%jed+1, 1:npz)
+ real:: wk(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  work array
+ real:: dvdz(bd%isd:bd%ied+1,bd%jsd:bd%jed, 1:npz)
+ real:: dudz(bd%isd:bd%ied,  bd%jsd:bd%jed+1, 1:npz)
+ real:: ducdz(bd%isd:bd%ied+1,bd%jsd:bd%jed, 1:npz)
+ real:: dvcdz(bd%isd:bd%ied,  bd%jsd:bd%jed+1, 1:npz)
+ real:: dwdz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  
+ real:: duadz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  
+ real:: dvadz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  
+ real:: zc(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  Height of layer center
+ real:: delz(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !< Lagrangian layer thickness  
+ real:: d, d1, d2, d3
+ integer:: i, j, k
+
+
+ real, pointer, dimension(:,:) :: dxc, dyc, dx, dy, rarea, rarea_c
+
+ integer :: is,  ie,  js,  je
+ integer :: isd, ied, jsd, jed
+      
+ is  = bd%is
+ ie  = bd%ie
+ js  = bd%js
+ je  = bd%je
+
+ isd  = bd%isd
+ ied  = bd%ied
+ jsd  = bd%jsd
+ jed  = bd%jed
+
+ dxc => gridstruct%dxc
+ dyc => gridstruct%dyc
+ dx  => gridstruct%dx
+ dy  => gridstruct%dy
+ rarea   => gridstruct%rarea
+ rarea_c => gridstruct%rarea_c
+
+
+  ! Compute delz and zc (z height of layer center)
+  do k = 1, npz
+     do j = jsd, jed
+        do i = isd, ied
+           delz(i,j,k) = zh(i,j,k) - zh(i,j,k+1)
+           zc(i,j,k) = 0.5*(zh(i,j,k) + zh(i,j,k+1))
+        enddo
+     enddo
+  enddo
+
+  !DEBUG 
+!  write(*,*) "zh = ", zh(10,10,:)
+!  write(*,*) "zc = ", zc(10,10,:)
+  !DEBUG
+  
+    ! Compute dudz, dvcdz
+  k = 1
+     do j = js, je+1
+        do i = is, ie
+           d2 = 0.5*0.5*(delz(i,j-1,k) + delz(i,j,k))
+           d3 = 0.5*0.5*(delz(i,j-1,k+1) + delz(i,j,k+1))
+
+           dudz(i,j,k) = 0.  ! Zero gradient on the top surface
+           dudz(i,j,k) = dudz(i,j,k) + 0.5*(u(i,j,k) - u(i,j,k+1))/(d2+d3)
+           dvcdz(i,j,k) = 0. ! Zero gradient on the top surface
+           dvcdz(i,j,k) = dvcdz(i,j,k) + 0.5*(vc(i,j,k) - vc(i,j,k+1))/(d2+d3)
+        enddo
+     enddo
+  
+  do k = 2, npz-1
+     do j = js, je+1
+        do i = is, ie
+           d1 = 0.5*0.5*(delz(i,j-1,k-1) + delz(i,j,k-1))
+           d2 = 0.5*0.5*(delz(i,j-1,k) + delz(i,j,k))
+           d3 = 0.5*0.5*(delz(i,j-1,k+1) + delz(i,j,k+1))
+
+           dudz(i,j,k) = 0.5*(u(i,j,k-1) - u(i,j,k))/(d1+d2)
+           dudz(i,j,k) = dudz(i,j,k) + 0.5*(u(i,j,k) - u(i,j,k+1))/(d2+d3)
+           dvcdz(i,j,k) = 0.5*(vc(i,j,k-1) - vc(i,j,k))/(d1+d2)
+           dvcdz(i,j,k) = dvcdz(i,j,k) + 0.5*(vc(i,j,k) - vc(i,j,k+1))/(d2+d3)
+        enddo
+     enddo
+  enddo
+
+  k = npz
+     do j = js, je+1
+        do i = is, ie
+           d1 = 0.5*0.5*(delz(i,j-1,k-1) + delz(i,j,k-1))
+           d2 = 0.5*0.5*(delz(i,j-1,k) + delz(i,j,k))
+
+           dudz(i,j,k) = 0.5*(u(i,j,k-1) - u(i,j,k))/(d1+d2)
+           !dudz(i,j,k) = dudz(i,j,k) + 0.5*(u(i,j,k) - 0)/d2  ! No-slip at lower boundary
+           dudz(i,j,k) = dudz(i,j,k) + 0.  ! Free-slip at lower boundary
+           dvcdz(i,j,k) = 0.5*(vc(i,j,k-1) - vc(i,j,k))/(d1+d2)
+           !dvcdz(i,j,k) = dvcdz(i,j,k) + 0.5*(vc(i,j,k) - 0.)/d2 ! No-slip at lower boundary
+           dvcdz(i,j,k) = dvcdz(i,j,k) + 0. ! Free-slip at lower boundary
+
+        enddo
+     enddo
+
+  ! Compute dvdz, ducdz
+  k = 1
+     do j = js, je
+        do i = is, ie+1
+           d2 = 0.5*0.5*(delz(i-1,j,k) + delz(i,j,k))
+           d3 = 0.5*0.5*(delz(i-1,j,k+1) + delz(i,j,k+1))
+
+           dvdz(i,j,k) = 0.  ! Zero gradient on the top
+           dvdz(i,j,k) = dvdz(i,j,k) + 0.5*(v(i,j,k) - v(i,j,k+1))/(d2+d3)
+           ducdz(i,j,k) = 0. ! Zero gradient on the top
+           ducdz(i,j,k) = ducdz(i,j,k) + 0.5*(uc(i,j,k) - uc(i,j,k+1))/(d2+d3)
+        enddo
+     enddo
+  
+  do k = 2, npz-1
+     do j = js, je
+        do i = is, ie+1
+           d1 = 0.5*0.5*(delz(i-1,j,k-1) + delz(i,j,k-1))
+           d2 = 0.5*0.5*(delz(i-1,j,k) + delz(i,j,k))
+           d3 = 0.5*0.5*(delz(i-1,j,k+1) + delz(i,j,k+1))
+
+           dvdz(i,j,k) = 0.5*(v(i,j,k-1) - v(i,j,k))/(d1+d2)
+           dvdz(i,j,k) = dvdz(i,j,k) + 0.5*(v(i,j,k) - v(i,j,k+1))/(d2+d3)
+           ducdz(i,j,k) = 0.5*(uc(i,j,k-1) - uc(i,j,k))/(d1+d2)
+           ducdz(i,j,k) = ducdz(i,j,k) + 0.5*(uc(i,j,k) - uc(i,j,k+1))/(d2+d3)
+        enddo
+     enddo
+  enddo
+
+  k = npz
+     do j = js, je
+        do i = is, ie+1
+           d1 = 0.5*0.5*(delz(i-1,j,k-1) + delz(i,j,k-1))
+           d2 = 0.5*0.5*(delz(i-1,j,k) + delz(i,j,k))
+
+           dvdz(i,j,k) = 0.5*(v(i,j,k-1) - v(i,j,k))/(d1+d2)
+           !dvdz(i,j,k) = dvdz(i,j,k) + 0.5*(v(i,j,k) - 0.)/d2  ! No-slip at the bottom, or
+           dvdz(i,j,k) = dvdz(i,j,k) + 0.0                      ! Free-slip at the bottom
+           ducdz(i,j,k) = 0.5*(uc(i,j,k-1) - uc(i,j,k))/(d1+d2)
+           !ducdz(i,j,k) = ducdz(i,j,k) + 0.5*(uc(i,j,k) - 0.)/d2    ! No-slip at the bottom, or
+           ducdz(i,j,k) = ducdz(i,j,k) + 0.0                         ! Free-slip at the bottom
+        enddo
+     enddo
+     
+  ! Compute dwdz, duadz, dvadz
+  k = 1
+     do j = js, je
+        do i = is, ie
+           d2 = 0.5*(delz(i,j,k))
+           d3 = 0.5*(delz(i,j,k+1))
+
+           dwdz(i,j,k) = 0.  ! Zero gradient on the top
+           duadz(i,j,k) = 0.
+           dvadz(i,j,k) = 0.
+           dwdz(i,j,k) = dwdz(i,j,k) + 0.5*(w(i,j,k) - w(i,j,k+1))/(d2+d3)
+           duadz(i,j,k) = duadz(i,j,k) + 0.5*(ua(i,j,k) - ua(i,j,k+1))/(d2+d3)
+           dvadz(i,j,k) = dvadz(i,j,k) + 0.5*(va(i,j,k) - va(i,j,k+1))/(d2+d3)
+        enddo
+     enddo
+  
+  do k = 2, npz-1
+     do j = js, je
+        do i = is, ie
+           d1 = 0.5*(delz(i,j,k-1))
+           d2 = 0.5*(delz(i,j,k))
+           d3 = 0.5*(delz(i,j,k+1))
+
+           dwdz(i,j,k) = 0.5*(w(i,j,k-1) - w(i,j,k))/(d1+d2)
+           duadz(i,j,k) = 0.5*(ua(i,j,k-1) - ua(i,j,k))/(d1+d2)
+           dvadz(i,j,k) = 0.5*(va(i,j,k-1) - va(i,j,k))/(d1+d2)
+           dwdz(i,j,k) = dwdz(i,j,k) + 0.5*(w(i,j,k) - w(i,j,k+1))/(d2+d3)
+           duadz(i,j,k) = duadz(i,j,k) + 0.5*(ua(i,j,k) - ua(i,j,k+1))/(d2+d3)
+           dvadz(i,j,k) = dvadz(i,j,k) + 0.5*(va(i,j,k) - va(i,j,k+1))/(d2+d3)
+
+     
+              ! DEBUGGING
+              !if (abs(duadz(i,j,k)) > 5e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(duadz(i,j,k)) = ", abs(duadz(i,j,k))
+              !   write(*,*) "d1, d2, d3 = ", d1, d2, d3
+              !   write(*,*) "ua(i,j,k-1), ua(i,j,k), ua(i,j,k+1) = ", ua(i,j,k-1), ua(i,j,k), ua(i,j,k+1)
+              !endif
+              !if (abs(dvadz(i,j,k)) > 5e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(dvadz(i,j,k)) = ", abs(dvadz(i,j,k))
+              !   write(*,*) "d1, d2, d3 = ", d1, d2, d3
+              !   write(*,*) "va(i,j,k-1), va(i,j,k), va(i,j,k+1) = ", va(i,j,k-1), va(i,j,k), va(i,j,k+1)
+              !endif
+              !if (abs(dwdz(i,j,k)) > 1e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(dwdz(i,j,k)) = ", abs(dwdz(i,j,k))
+              !   write(*,*) "d1, d2, d3 = ", d1, d2, d3
+              !   write(*,*) "w(i,j,k-1), w(i,j,k), w(i,j,k+1) = ", w(i,j,k-1), w(i,j,k), w(i,j,k+1)
+              !endif
+              ! DEBUGGING
+           
+        enddo
+     enddo
+  enddo
+
+  k = npz
+     do j = js, je
+        do i = is, ie
+           d1 = 0.5*(delz(i,j,k-1))
+           d2 = 0.5*(delz(i,j,k))
+
+           dwdz(i,j,k) = 0.5*(w(i,j,k-1) - w(i,j,k))/(d1+d2)
+           dwdz(i,j,k) = dwdz(i,j,k) + 0.5*(w(i,j,k) - 0.)/d2  ! No flux at the bottom
+           duadz(i,j,k) = 0.5*(ua(i,j,k-1) - ua(i,j,k))/(d1+d2)
+           !duadz(i,j,k) = duadz(i,j,k) + 0.5*(ua(i,j,k) - 0.)/d2  ! No slip at the bottom, or 
+           duadz(i,j,k) = duadz(i,j,k) + 0.0                       ! Free slip at the bottom
+           dvadz(i,j,k) = 0.5*(va(i,j,k-1) - va(i,j,k))/(d1+d2)
+           !dvadz(i,j,k) = dvadz(i,j,k) + 0.5*(va(i,j,k) - 0.)/d2  ! No slip at the bottom, or
+           dvadz(i,j,k) = dvadz(i,j,k) + 0.0                       ! Free slip at the bottom
+
+        enddo
+     enddo
+          
+     
+
+     ! Initialize smag
+     do k = 1, npz
+        do j = jsd, jed
+           do i = isd, ied
+              smag(i,j,k) = 0.
+           enddo
+        enddo
+     enddo
+     
+     ! Calcuate the component 2/3*u_x - 1/3*v_y - 1/3*w_z on the constant z level
+     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, 2./3, -1./3, -1./3, smag, bd, npz, gridstruct)
+
+     ! DEBUG
+     !write(*,*) "Point 1. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
+     ! Calcuate the component -1/3*u_x + 2/3*v_y - 1/3*w_z on the constant z level
+     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, 2./3, -1./3, smag, bd, npz, gridstruct)
+
+     ! DEBUG
+     !write(*,*) "Point 2. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
+     
+     ! Calcuate the component -1/3*u_x - 1/3*v_y + 2/3*w_z on the constant z level
+     call compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, -1./3, -1./3, 2./3, smag, bd, npz, gridstruct)
+
+     ! DEBUG
+     !write(*,*) "Point 3. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
+     
+     ! Compute v_x + u_y 
+     !! First, at constant Lagrangian levels
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie+1
+              ut(i,j,k) = v(i,j,k) * dy(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je+1
+           do i = is, ie
+              vt(i,j,k) = u(i,j,k) * dx(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie
+              wk(i,j,k) = rarea(i,j)*(-vt(i,j,k) + vt(i,j+1,k) - ut(i,j,k) + ut(i+1,j,k))   ! Local variable wk reset and re-used
+           enddo
+        enddo
+     enddo
+
+     !! Corrections due to sloping Lagrangian surfaces
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie+1
+              ut(i,j,k) = dvdz(i,j,k) * (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je+1
+           do i = is, ie
+              vt(i,j,k) = dudz(i,j,k) * (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie
+              wk(i,j,k) = wk(i,j,k) - 0.5*(ut(i,j,k) + ut(i+1,j,k) + vt(i,j,k) + vt(i,j+1,k))
+
+              ! DEBUGGING
+              !if (abs(wk(i,j,k)) > 0.1) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(vxuy(i,j,k)) = ", abs(wk(i,j,k))
+              !endif
+              ! DEBUGGING
+              
+              
+              smag(i,j,k) = smag(i,j,k) + wk(i,j,k)**2
+           enddo
+        enddo
+     enddo
+     
+     ! DEBUG
+     !write(*,*) "Point 4. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
+
+     ! Compute w_x + u_z
+     !! First, w_x + u_z at constant Langrangian surface
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie+1
+              ut(i,j,k) = (w(i,j,k) - w(i-1,j,k)) / dxc(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie
+              wk(i,j,k) = 0.5*(ut(i,j,k) + ut(i+1,j,k)) + duadz(i,j,k)
+           enddo
+        enddo
+     enddo
+
+     ! DEBUG
+     !if (abs(wk(96,9,61)) > 1e-2) then
+     !   write(*,*) 'w_x + u_z:'
+     !   write(*,*) 'wx(96,9,61), wx(97,9,61) = ', ut(96,9,61), ut(97,9,61)
+     !   write(*,*) 'duadz(96,9,61) = ', duadz(96,9,61)
+     !end if
+     ! DEBUG
+     
+     
+     !! Correction due to the sloping Lagrangian surfaces
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie+1
+              ut(i,j,k) = (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie
+              wk(i,j,k) = wk(i,j,k) - 0.5*(ut(i,j,k) + ut(i+1,j,k))*dwdz(i,j,k)
+
+              ! DEBUGGING
+              !if (abs(wk(i,j,k)) > 0.1) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "abs(wxuz(i,j,k)) = ", abs(wk(i,j,k))
+              !endif
+              ! DEBUGGING
+              
+              smag(i,j,k) = smag(i,j,k) + wk(i,j,k)**2
+           enddo
+        enddo
+     enddo
+
+     ! DEBUG
+!     if (abs(wk(96,9,61)) > 1e-2) then
+!        write(*,*) 'w_x + u_z: correction'
+!        write(*,*) 'zx(96,9,61), zx(97,9,61) = ', ut(96,9,61), ut(97,9,61)
+!        write(*,*) 'dwdz(96,9,61) = ', dwdz(96,9,61)
+!     end if
+     ! DEBUG
+     
+     
+     ! DEBUG
+!     if (smag(96,9,61) > 1.9e-3) then
+!        write(*,*) "Point 5. smag(96, 9, 61) = ", smag(96,9,61)
+!     end if
+     
+     ! DEBUG
+     
+
+     ! Compute w_y + v_z
+     !! First, w_y + v_z at constant Langrangian surface
+     do k = 1, npz
+        do j = js, je+1
+           do i = is, ie
+              vt(i,j,k) = (w(i,j,k) - w(i,j-1,k)) / dyc(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie
+              wk(i,j,k) = 0.5*(vt(i,j,k) + vt(i,j+1,k)) + dvadz(i,j,k)
+           enddo
+        enddo
+     enddo
+
+     !! Correction due to the sloping Lagrangian surfaces
+     do k = 1, npz
+        do j = js, je+1
+           do i = is, ie
+              vt(i,j,k) = (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j)
+           enddo
+        enddo
+     enddo
+
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie
+              wk(i,j,k) = wk(i,j,k) - 0.5*(vt(i,j,k) + vt(i,j+1,k))*dwdz(i,j,k)
+
+              ! DEBUGGING
+!              if (abs(wk(i,j,k)) > 0.1) then
+!                 write(*,*) "i, j, k = ", i, j, k
+!                 write(*,*) "abs(wyvz(i,j,k)) = ", abs(wk(i,j,k))
+!              endif
+              ! DEBUGGING
+              
+              smag(i,j,k) = smag(i,j,k) + wk(i,j,k)**2
+           enddo
+        enddo
+     enddo
+
+     ! DEBUG
+     !write(*,*) "Point 6. smag(96, 9, 61) = ", smag(96,9,61)
+     ! DEBUG
+     
+
+     ! Square root
+     do k = 1, npz
+        do j = js, je
+           do i = is, ie
+              smag(i,j,k) = sqrt(smag(i,j,k))
+
+              ! DEBUGGING
+              !if (smag(i,j,k) > 5.48e-2) then
+              !   write(*,*) "i, j, k = ", i, j, k
+              !   write(*,*) "smag(i,j,k) = ", smag(i,j,k)
+              !endif
+              ! DEBUGGING
+              
+           enddo
+        enddo
+     enddo
+
+     ! DEBUGGING
+     !write(*,*) 'max of smag: ', maxval(smag)
+     !write(*,*) 'indices    : ', maxloc(smag)
+     ! DEBUGGING
+     
+    
+ end subroutine compute_smag_tensor_norm
+
+ ! Compute a*u_x + b*v_y + c*w_z
+ subroutine compute_smag_auxbvycwz(uc, vc, w, ducdz, dvcdz, dwdz, delz, zc, a, b, c, smag, bd, npz, gridstruct)
+ type(fv_grid_bounds_type), intent(IN) :: bd
+ integer, intent(IN) :: npz
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed+1, 1:npz):: vc, dvcdz
+ real, intent(in),  dimension(bd%isd:bd%ied+1, bd%jsd:bd%jed,   1:npz):: uc, ducdz
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: w, dwdz
+ real, intent(in),  dimension(bd%isd:bd%ied,   bd%jsd:bd%jed,   1:npz):: zc, delz
+ real, intent(inout), dimension(bd%isd:bd%ied, bd%jsd:bd%jed, 1:npz):: smag
+ type(fv_grid_type), intent(IN), target :: gridstruct
+ real, intent(in) :: a, b, c
+ 
+! local
+ real:: ut(bd%isd:bd%ied+1,bd%jsd:bd%jed, 1:npz)
+ real:: vt(bd%isd:bd%ied,  bd%jsd:bd%jed+1, 1:npz)
+ real:: wk(bd%isd:bd%ied,bd%jsd:bd%jed, 1:npz) !<  work array
+ real:: d
+ integer i,j
+
+ real, pointer, dimension(:,:) :: dxc, dyc, dx, dy, rarea, rarea_c
+
+ integer :: is,  ie,  js,  je
+ integer :: isd, ied, jsd, jed, k
+      
+ is  = bd%is
+ ie  = bd%ie
+ js  = bd%js
+ je  = bd%je
+
+ isd  = bd%isd
+ ied  = bd%ied
+ jsd  = bd%jsd
+ jed  = bd%jed
+
+ dxc => gridstruct%dxc
+ dyc => gridstruct%dyc
+ dx  => gridstruct%dx
+ dy  => gridstruct%dy
+ rarea   => gridstruct%rarea
+ rarea_c => gridstruct%rarea_c
+
+  ! Calcuate a*u_x + b*v_y on the constant z level, as cell mean and layer mean
+  !! First, calcuate the quantity at constant Lagrangian level
+  wk(:,:,:) = 0.
+    do k = 1, npz
+       do j=js, je
+          do i=is, ie+1
+             ut(i,j,k) = uc(i,j,k)*dy(i,j)
+          enddo
+       enddo
+    enddo
+
+    do k = 1, npz
+       do j=js,je+1
+          do i=is,ie
+             vt(i,j,k) = vc(i,j,k)*dx(i,j)
+          enddo
+       enddo
+    enddo
+    
+    do k = 1, npz
+       do j = js, je
+          do i = is, ie
+             wk(i,j,k) = -a*ut(i,j,k) + a*ut(i+1,j,k)
+             wk(i,j,k) = wk(i,j,k) - b*vt(i,j,k) + b*vt(i,j+1,k)
+             wk(i,j,k) = rarea(i,j) * wk(i,j,k)
+          enddo
+       enddo
+    enddo
+
+    !! Corrections due to the sloping of the Lagrangian surfaces
+    do k = 1, npz
+       do j = js, je
+          do i = is, ie+1
+             ut(i,j,k) = ducdz(i,j,k) * (zc(i,j,k) - zc(i-1,j,k)) / dxc(i,j)
+          enddo
+       enddo
+    enddo
+
+    do k = 1, npz
+       do j = js, je+1
+          do i = is, ie
+             vt(i,j,k) = dvcdz(i,j,k) * (zc(i,j,k) - zc(i,j-1,k)) / dyc(i,j)
+          enddo
+       enddo
+    enddo
+
+    do k = 1, npz
+       do j = js, je
+          do i = is, ie
+             wk(i,j,k) = wk(i,j,k) - 0.5*a*(ut(i,j,k) + ut(i+1,j,k)) - 0.5*b*(vt(i,j,k) + vt(i,j+1,k))
+          enddo
+       enddo
+    enddo
+
+    !! Add in c*dwdz
+    do k = 1, npz
+       do j = js, je
+          do i = is, ie
+             smag(i,j,k) = smag(i,j,k) + (wk(i,j,k) + c*dwdz(i,j,k))**2
+          enddo
+       enddo
+    enddo
+
+ end subroutine compute_smag_auxbvycwz
+
 end module dyn_core_mod
