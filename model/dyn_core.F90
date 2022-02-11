@@ -171,6 +171,9 @@ contains
     real heat_s(bd%is:bd%ie,bd%js:bd%je)
     real damp_vt(npz+1)
     integer nord_v(npz+1)
+! New array for the Smagorinsky eddy closure coefficient
+    real smag(bd%isd:bd%ied, bd%jsd:bd%jed, 1:npz)    
+
 !-------------------------------------
     integer :: hord_m, hord_v, hord_t, hord_p
     integer :: nord_k, nord_w, nord_t
@@ -642,6 +645,14 @@ contains
       endif
 
     endif
+
+
+    !****************************************************************
+    ! Compute Smagorinsky eddy closure coefficients                 *
+    !****************************************************************
+    call compute_smag_tensor_norm(u(isd,jsd,1), v(isd, jsd, 1), uc(isd, jsd, 1), vc(isd, jsd, 1), &
+         ua(isd, jsd, 1), va(isd, jsd, 1), w(isd:, jsd:, 1:), zh(isd, jsd, 1), smag(isd, jsd, 1), bd, npz, &
+         gridstruct)
 
 
                                                      call timing_on('d_sw')
