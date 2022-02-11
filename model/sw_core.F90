@@ -23,7 +23,7 @@
  use tp_core_mod,       only: fv_tp_2d, pert_ppm, copy_corners
  use fv_mp_mod, only: fill_corners, XDir, YDir
  use fv_arrays_mod, only: fv_grid_type, fv_grid_bounds_type, fv_flags_type
- use a2b_edge_mod, only: a2b_ord4
+ use a2b_edge_mod, only: a2b_ord4, a2b_ord2
 
 #ifdef SW_DYNAMICS
  use test_cases_mod,   only: test_case
@@ -1396,18 +1396,28 @@
      if ( dddmp<1.E-5) then
           vort(:,:) = 0.
      else
-      if ( flagstruct%grid_type < 3 ) then
-! Interpolate relative vort to cell corners
-          call a2b_ord4(wk, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)
+      ! 2D Smagorinsky closure
+!      if ( flagstruct%grid_type < 3 ) then
+!! Interpolate relative vort to cell corners
+!          call a2b_ord4(wk, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)
+!          do j=js,je+1
+!             do i=is,ie+1
+!! The following is an approxi form of Smagorinsky diffusion
+!                vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
+!             enddo
+!          enddo
+!      else  ! Correct form: works only for doubly preiodic domain
+!          call smag_corner(abs(dt), u, v, ua, va, vort, bd, npx, npy, gridstruct, ng)
+!      endif
+
+      ! 3D Smagorinsky closure
+         call a2b_ord2(smag, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)          
           do j=js,je+1
              do i=is,ie+1
-! The following is an approxi form of Smagorinsky diffusion
-                vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
+                vort(i,j) = abs(dt)*vort(i,j)
              enddo
           enddo
-      else  ! Correct form: works only for doubly preiodic domain
-          call smag_corner(abs(dt), u, v, ua, va, vort, bd, npx, npy, gridstruct, ng)
-      endif
+
      endif
 
      if (gridstruct%stretched_grid ) then
