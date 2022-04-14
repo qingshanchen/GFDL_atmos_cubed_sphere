@@ -48,6 +48,7 @@
       use fv_arrays_mod,         only: fv_grid_type, fv_flags_type, fv_grid_bounds_type, R_GRID
       use tracer_manager_mod,    only: get_tracer_index
       use field_manager_mod,     only: MODEL_ATMOS
+      use w_forcing_mod,         only: init_w_forcing
       implicit none
       private
 
@@ -129,6 +130,8 @@
       logical :: checker_tr
       real    :: small_earth_scale = 1.0
       real    :: umean = 0.0
+      real    :: vmean = 0.0
+      logical :: w_forcing
 
 ! Case 0 parameters
       real :: p0_c0 = 3.0
@@ -182,7 +185,7 @@
       public :: case9_forcing1, case9_forcing2, case51_forcing
       public :: init_double_periodic
       public :: checker_tracers
-      public :: radius, omega, small_earth_scale
+      public :: radius, omega, small_earth_scale, w_forcing
 
   INTERFACE mp_update_dwinds
      MODULE PROCEDURE mp_update_dwinds_2d
@@ -1560,7 +1563,6 @@
 
          !For consistency with earlier single-grid simulations use gh0 = 1.0e-6 and p1(1) = 195.*pi/180.
          q(:,:,:,:) = 0.
-
 
     ! Initialize surface Pressure
          ps(:,:) = 1.e5
@@ -5009,13 +5011,13 @@ end subroutine terminator_tracers
 ! u-wind
            do j=js,je+1
               do i=is,ie
-                 u(i,j,k) = utmp - 8.
+                 u(i,j,k) = utmp - 8. + Umean
              enddo
            enddo
 ! v-wind
            do j=js,je
               do i=is,ie+1
-                 v(i,j,k) = vtmp - 4.
+                 v(i,j,k) = vtmp - 4. + Vmean
              enddo
            enddo
         enddo
@@ -5156,7 +5158,7 @@ end subroutine terminator_tracers
            ptmp = ( (zm-zc)/zc ) **2
            do j=js,je
               do i=is,ie
-                 dist = ptmp+((i-icenter)*dx_const/r0)**2+((j-jcenter)*dy_const/r0)**2
+                 dist = ptmp+((i-icenter)*dx_const/r0)**2+((j-jcenter)*dy_const/(r0*8))**2
                  pt(i,j,k) = pt(i,j,k) + pturb*max(1.-sqrt(dist),0.)
               enddo
            enddo
@@ -5674,7 +5676,8 @@ end subroutine terminator_tracers
         character(*), intent(IN) :: nml_filename
         integer :: ierr, f_unit, unit, ios
         namelist /test_case_nml/test_case, bubble_do, alpha, nsolitons, soliton_Umax, soliton_size, &
-             no_wind, gaussian_dt, dt_amp, do_marine_sounding, checker_tr, small_earth_scale, Umean
+             no_wind, gaussian_dt, dt_amp, do_marine_sounding, checker_tr, small_earth_scale, &
+             Umean, Vmean, w_forcing
 
 #include<file_version.h>
 
@@ -8076,7 +8079,5 @@ end subroutine terminator_tracers
    enddo
 
  end subroutine sm1_edge
-
-
 
 end module test_cases_mod

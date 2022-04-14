@@ -434,6 +434,7 @@ contains
    type(time_type) :: atmos_time
    integer :: atmos_time_step
    real :: rdt
+   real :: time_total
 !---- Call FV dynamics -----
 
    call mpp_clock_begin (id_dynam)
@@ -452,7 +453,9 @@ contains
 !save ps to ps_dt before dynamics update
    ps_dt(:,:)=Atm(n)%ps(:,:)
 
-   do psc=1,abs(p_split)
+  time_total = time_type_to_real( Time - Atm(n)%Time_init )
+
+  do psc=1,abs(p_split)
       p_step = psc
                     call timing_on('fv_dynamics')
 !uc/vc only need be same on coarse grid? However BCs do need to be the same
@@ -473,7 +476,8 @@ contains
                       Atm(n)%gridstruct, Atm(n)%flagstruct,                &
                       Atm(n)%neststruct, Atm(n)%idiag, Atm(n)%bd,          &
                       Atm(n)%parent_grid, Atm(n)%domain, Atm(n)%inline_mp, &
-                      Atm(n)%diss_est)
+                      Atm(n)%diss_est, time_total=time_total)
+     
      call timing_off('fv_dynamics')
 
     if (ngrids > 1 .and. (psc < p_split .or. p_split < 0)) then
