@@ -5789,7 +5789,9 @@ end subroutine terminator_tracers
           call p_var(npz, is, ie, js, je, ptop, ptop_min, delp, delz, pt, ps,   &
                      pe, peln, pk, pkz, kappa, q, ng, ncnst, area, dry_mass, .false., .false., &
                      moist_phys, hydrostatic, nwat, domain, flagstruct%adiabatic, .not. hydrostatic )
-
+          
+       case default
+          call mpp_error(FATAL, 'Value of test_case not implemented ')
 
         end select
 
