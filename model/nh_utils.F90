@@ -10,7 +10,7 @@
 !* (at your option) any later version.
 !*
 !* The FV3 dynamical core is distributed in the hope that it will be
-!* useful, but WITHOUT ANYWARRANTY; without even the implied warranty
+!* useful, but WITHOUT ANY WARRANTY; without even the implied warranty
 !* of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 !* See the GNU General Public License for more details.
 !*
@@ -18,6 +18,7 @@
 !* License along with the FV3 dynamical core.
 !* If not, see <http://www.gnu.org/licenses/>.
 !***********************************************************************
+
 module nh_utils_mod
 ! Developer: S.-J. Lin, NOAA/GFDL
 ! To do list:
@@ -34,9 +35,13 @@ module nh_utils_mod
    public update_dz_c, update_dz_d, nh_bc
    public sim_solver, sim1_solver, sim3_solver
    public sim3p0_solver, rim_2d
-   public Riem_Solver_c
+   public Riem_Solver_c, edge_scalar, imp_diff_w
 
+#ifdef DZ_MIN_6
+   real, parameter:: dz_min = 6.
+#else
    real, parameter:: dz_min = 2.
+#endif
    real, parameter:: r3 = 1./3.
 
 CONTAINS
@@ -173,6 +178,11 @@ CONTAINS
      enddo
      do k=km, 1, -1
         do i=is1, ie1
+#ifdef DZ_MIN_6
+           if (gz(i,j,k) < gz(i,j,k+1) + dz_min) then
+              write(*,'(A, 3I4, 2F)') 'UPDATE_DZ_C: dz limiter applied', i, j, k, gz(i,j,k), gz(i,j,k+1)
+           endif
+#endif
            gz(i,j,k) = max( gz(i,j,k), gz(i,j,k+1) + dz_min )
         enddo
      enddo
@@ -288,6 +298,11 @@ CONTAINS
      do k=km, 1, -1
         do i=is, ie
 ! Enforce monotonicity of height to prevent blowup
+#ifdef DZ_MIN_6
+           if (zh(i,j,k) < zh(i,j,k+1) + dz_min) then
+              write(*,'(A, 3I4, 2F)') 'UPDATE_DZ_D: dz limiter applied', i, j, k, zh(i,j,k), zh(i,j,k+1)
+           endif
+#endif
            zh(i,j,k) = max( zh(i,j,k), zh(i,j,k+1) + dz_min )
         enddo
      enddo
@@ -574,13 +589,12 @@ CONTAINS
   end subroutine Riem_Solver3test
 
 
-  subroutine imp_diff_w(j, is, ie, js, je, ng, km, cd, delz, ws, w, w3)
-  integer, intent(in) :: j, is, ie, js, je, km, ng
+  subroutine imp_diff_w(is, ie, km, cd, delz, ws, w)
+  integer, intent(in) :: is, ie, km
   real, intent(in) :: cd
   real, intent(in) :: delz(is:ie, km)  ! delta-height (m)
-  real, intent(in) :: w(is:ie, km)  ! vertical vel. (m/s)
+  real, intent(inout) :: w(is:ie, km)  ! vertical vel. (m/s)
   real, intent(in) :: ws(is:ie)
-  real, intent(out) :: w3(is-ng:ie+ng,js-ng:je+ng,km)
 ! Local:
   real, dimension(is:ie,km):: c, gam, dz, wt
   real:: bet(is:ie)
@@ -618,22 +632,23 @@ CONTAINS
      do i=is,ie
         gam(i,km) = c(i,km-1) / bet(i)
                 a = cd/(dz(i,km)*delz(i,km))
-         wt(i,km) = (w(i,km) + 2.*ws(i)*cd/delz(i,km)**2                        &
+         w(i,km) = (w(i,km) + 2.*ws(i)*cd/delz(i,km)**2                        &
                   +  a*wt(i,km-1))/(1. + a + (cd+cd)/delz(i,km)**2 + a*gam(i,km))
      enddo
 
      do k=km-1,1,-1
         do i=is,ie
-           wt(i,k) = wt(i,k) - gam(i,k+1)*wt(i,k+1)
+           w(i,k) = wt(i,k) - gam(i,k+1)*w(i,k+1)
         enddo
      enddo
 
-     do k=1,km
-        do i=is,ie
-           w3(i,j,k) = wt(i,k)
-        enddo
-     enddo
-
+!!$
+!!$     do k=1,km
+!!$        do i=is,ie
+!!$           w3(i,j,k) = wt(i,k)
+!!$        enddo
+!!$     enddo
+!!$
   end subroutine imp_diff_w
 
 
@@ -1625,7 +1640,6 @@ CONTAINS
 
  end subroutine edge_profile
 
-!TODO LMH 25may18: do not need delz defined on full compute domain; pass appropriate BCs instead
  subroutine nh_bc(ptop, grav, kappa, cp, delp, delzBC, pt, phis, &
 #ifdef USE_COND
       q_con, &
