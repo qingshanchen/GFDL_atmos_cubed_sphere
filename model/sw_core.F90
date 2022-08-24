@@ -571,6 +571,8 @@
       integer :: npx, npy, ng
       logical :: bounded_domain
 
+      real, parameter :: cs = .01 ! Smargorinsky constant
+
       is  = bd%is
       ie  = bd%ie
       js  = bd%js
@@ -941,9 +943,15 @@
 
         if ( .not. hydrostatic ) then
             if ( damp_w>1.E-5 ) then
+
+                 !!! Original horizontal diff for w: constant coefficient
                  dd8 = kgb*abs(dt)
                  damp4 = (damp_w*gridstruct%da_min_c)**(nord_w+1)
                  call del6_vt_flux(nord_w, npx, npy, damp4, w, wk, fx2, fy2, gridstruct, bd)
+
+                 !!! Smagorinsky horizontal diff for w: variable coefficient
+!                 call del6_vt_flux_smag(0, npx, npy, cs, smag, w, wk, fx2, fy2, gridstruct, bd)
+
                 do j=js,je
                    do i=is,ie
                       dw(i,j) = (fx2(i,j)-fx2(i+1,j)+fy2(i,j)-fy2(i,j+1))*rarea(i,j)
@@ -1396,27 +1404,31 @@
      if ( dddmp<1.E-5) then
           vort(:,:) = 0.
      else
-      ! 2D Smagorinsky closure
-!      if ( flagstruct%grid_type < 3 ) then
-!! Interpolate relative vort to cell corners
-!          call a2b_ord4(wk, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)
-!          do j=js,je+1
-!             do i=is,ie+1
-!! The following is an approxi form of Smagorinsky diffusion
-!                vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
-!             enddo
-!          enddo
-!      else  ! Correct form: works only for doubly preiodic domain
-!          call smag_corner(abs(dt), u, v, ua, va, vort, bd, npx, npy, gridstruct, ng)
-!      endif
-
-      ! 3D Smagorinsky closure
-         call a2b_ord2(smag, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)          
+      !!! 2D Smagorinsky closure
+      if ( flagstruct%grid_type < 3 ) then
+          ! Interpolate relative vort to cell corners
+          call a2b_ord4(wk, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)
           do j=js,je+1
              do i=is,ie+1
-                vort(i,j) = abs(dt)*vort(i,j)
+                ! The following is an approxi form of Smagorinsky diffusion
+                vort(i,j) = abs(dt)*sqrt(delpc(i,j)**2 + vort(i,j)**2)
              enddo
           enddo
+      else  
+          ! Correct form: works only for doubly preiodic domain
+          call smag_corner(abs(dt), u, v, ua, va, vort, bd, npx, npy, gridstruct, ng)
+      endif
+
+      !!! 3D Smagorinsky closure
+!         call a2b_ord2(smag, vort, gridstruct, npx, npy, is, ie, js, je, ng, .false.)          
+!          do j=js,je+1
+!             do i=is,ie+1
+!                vort(i,j) = abs(dt)*vort(i,j)
+!             enddo
+!          enddo
+
+       !!! No Smagorinsky
+!       vort(:,:) = 0.
 
      endif
 
@@ -1429,7 +1441,12 @@
 
      do j=js,je+1
         do i=is,ie+1
+           !!! Original implementation
            damp2 =  gridstruct%da_min_c*max(d2_bg, min(0.20, dddmp*vort(i,j)))  ! del-2
+
+           ! New implementation, consistent with vorticity damping
+!           damp2 = cs * gridstruct%da_min_c * vort(i,j)
+
            vort(i,j) = damp2*delpc(i,j) + dd8*divg_d(i,j)
              ke(i,j) = ke(i,j) + vort(i,j)
         enddo
@@ -1489,8 +1506,13 @@
 !--------------------------------------------------------
 ! damping applied to relative vorticity (wk):
    if ( damp_v>1.E-5 ) then
+        !!! Original vorticity damping: constant coefficient
         damp4 = (damp_v*gridstruct%da_min_c)**(nord_v+1)
         call del6_vt_flux(nord_v, npx, npy, damp4, wk, vort, ut, vt, gridstruct, bd)
+
+        !!! Smagorinsky-vorticity damping: variable coefficient
+!        call del6_vt_flux_smag(0, npx, npy, cs, smag, wk, vort, ut, vt, gridstruct, bd)
+
    endif
 
    if ( d_con > 1.e-5 ) then
@@ -1660,6 +1682,89 @@
    endif
 
  end subroutine del6_vt_flux
+
+
+ subroutine del6_vt_flux_smag(nord, npx, npy, damp, smag, q, d2, fx2, fy2, gridstruct, bd)
+! Del-nord damping for the relative vorticity
+! nord must be <= 2
+!------------------
+! nord = 0:   del-2
+! nord = 1:   del-4
+! nord = 2:   del-6
+!------------------
+   integer, intent(in):: nord, npx, npy
+   real, intent(in):: damp
+   type(fv_grid_bounds_type), intent(IN) :: bd
+   real, intent(inout):: q(bd%isd:bd%ied, bd%jsd:bd%jed)  ! rel. vorticity ghosted on input
+   real, intent(IN), dimension(bd%isd:bd%ied,  bd%jsd:bd%jed):: smag
+   type(fv_grid_type), intent(IN), target :: gridstruct
+! Work arrays:
+   real, intent(out):: d2(bd%isd:bd%ied, bd%jsd:bd%jed)
+   real, intent(out):: fx2(bd%isd:bd%ied+1,bd%jsd:bd%jed), fy2(bd%isd:bd%ied,bd%jsd:bd%jed+1)
+   integer i,j, nt, n, i1, i2, j1, j2
+
+   logical :: bounded_domain
+
+#ifdef USE_SG
+  real, pointer, dimension(:,:,:) :: sin_sg
+  real, pointer, dimension(:,:) ::  rdxc, rdyc, dx,dy
+#endif
+
+   integer :: is,  ie,  js,  je
+
+#ifdef USE_SG
+   sin_sg   => gridstruct%sin_sg
+   rdxc     => gridstruct%rdxc
+   rdyc     => gridstruct%rdyc
+   dx       => gridstruct%dx
+   dy       => gridstruct%dy
+#endif
+   bounded_domain = gridstruct%bounded_domain
+
+   is  = bd%is
+   ie  = bd%ie
+   js  = bd%js
+   je  = bd%je
+
+   i1 = is-1-nord;    i2 = ie+1+nord
+   j1 = js-1-nord;    j2 = je+1+nord
+
+   do j=j1, j2
+      do i=i1, i2
+         d2(i,j) = damp * gridstruct%da_min_c * q(i,j)          ! Scaling by the grid scale
+      enddo
+   enddo
+
+   if( nord>0 .and. .not. bounded_domain) call copy_corners(d2, npx, npy, 1, bounded_domain, bd, gridstruct%sw_corner,    &
+                   gridstruct%se_corner, gridstruct%nw_corner, gridstruct%ne_corner)
+   do j=js-nord,je+nord
+      do i=is-nord,ie+nord+1
+#ifdef USE_SG
+         fx2(i,j) = 0.5*(sin_sg(i-1,j,3)+sin_sg(i,j,1))*dy(i,j)*(d2(i-1,j)-d2(i,j))*0.5*(smag(i-1,j)+smag(i,j))*rdxc(i,j)
+#else
+         fx2(i,j) = gridstruct%del6_v(i,j)*(d2(i-1,j)-d2(i,j))*0.5*(smag(i-1,j)+smag(i,j))
+#endif
+      enddo
+   enddo
+
+   if( nord>0 .and. .not. bounded_domain) call copy_corners(d2, npx, npy, 2, bounded_domain, bd, gridstruct%sw_corner,   &
+                   gridstruct%se_corner, gridstruct%nw_corner, gridstruct%ne_corner)
+   do j=js-nord,je+nord+1
+      do i=is-nord,ie+nord
+#ifdef USE_SG
+         fy2(i,j) = 0.5*(sin_sg(i,j-1,4)+sin_sg(i,j,2))*dx(i,j)*(d2(i,j-1)-d2(i,j))*0.5*(smag(i,j-1)+smag(i,j))*rdyc(i,j)
+#else
+         fy2(i,j) = gridstruct%del6_u(i,j)*(d2(i,j-1)-d2(i,j))*0.5*(smag(i,j-1)+smag(i,j))
+#endif
+      enddo
+   enddo
+
+   if ( nord>0 ) then
+   write(*,*) "Error: nord>0 not support at this time!!!"
+   endif
+
+ end subroutine del6_vt_flux_smag
+
 
 
  subroutine divergence_corner(u, v, ua, va, divg_d, gridstruct, flagstruct, bd)

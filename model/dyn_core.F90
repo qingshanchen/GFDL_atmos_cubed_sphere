@@ -654,6 +654,13 @@ contains
          ua(isd, jsd, 1), va(isd, jsd, 1), w(isd:, jsd:, 1:), zh(isd, jsd, 1), smag(isd, jsd, 1), bd, npz, &
          gridstruct)
 
+!!!! DEBUG
+!do k = 1, npz
+!    write(*,*) 'layer ', k, ' maximum value of smag = ', maxval(maxval(smag(:,:,k), 1),1)
+!end do
+!    write(*,*) 'maximum value of smag = ', maxval(maxval(maxval(smag(:,:,:), 1),1),1)
+!    write(*,*) 'region ied-isd, jed-jsd: ', ied-isd, jed-jsd
+
 
                                                      call timing_on('d_sw')
 !$OMP parallel do default(none) shared(npz,flagstruct,nord_v,pfull,damp_vt,hydrostatic,last_step, &
