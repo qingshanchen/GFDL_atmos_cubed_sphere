@@ -4086,31 +4086,7 @@ end function d_sat
 ! compute the saturated water vapor pressure for table ii
 ! =======================================================================
 
-<<<<<<< HEAD
-real function wqsat_moist (ta, qv, pa)
-
-    implicit none
-
-    real, intent (in) :: ta, pa, qv
-
-    real :: es, ap1, tmin
-
-    integer :: it
-
-    tmin = table_ice - 160.
-    ap1 = 10. * dim (ta, tmin) + 1.
-    ap1 = min (2621., ap1)
-    it = ap1
-    es = tablew (it) + (ap1 - it) * desw (it)
-    wqsat_moist = eps * es * (1. + zvir * qv) / pa
-
-end function wqsat_moist
-
-
-real function wqs1 (ta, den)
-=======
 real function esw_table (ta)
->>>>>>> 1a7275ca9ffc1fee761b6f794037129c0a04137e
 
     implicit none
 
